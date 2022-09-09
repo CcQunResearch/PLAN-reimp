@@ -11,3 +11,9 @@ cd /home/ccq/Research/PLAN-reimp/Main
 ```shell script
 nohup python main.py --gpu 0 &
 ```
+
+# 二、数据集
+
+| | max post num | avg post num | max word num | avg word num |
+| :----: | :----: | :----: | :----: | :----: |
+| Weibo | 599 | 168.81 | 280 | 17.47 |

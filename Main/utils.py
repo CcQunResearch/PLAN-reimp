@@ -52,10 +52,12 @@ def create_log_dict(args):
     log_dict['dataset'] = args.dataset
     log_dict['runs'] = args.runs
 
+    log_dict['hitplan'] = args.hitplan
     log_dict['batch_size'] = args.batch_size
     log_dict['epochs'] = args.epochs
 
-    log_dict['k'] = args.k
+    log_dict['max_length'] = args.max_length
+    log_dict['max_tweet'] = args.max_tweet
 
     log_dict['emb_dim'] = args.emb_dim
     log_dict['num_structure_index'] = args.num_structure_index

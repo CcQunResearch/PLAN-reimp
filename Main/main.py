@@ -8,10 +8,12 @@
 import sys
 import os.path as osp
 import warnings
+import random
 
 dirname = osp.dirname(osp.abspath(__file__))
 sys.path.append(osp.join(dirname, '..'))
 warnings.filterwarnings("ignore")
+random.seed(2022)
 
 import numpy as np
 import time
@@ -20,15 +22,15 @@ import torch.nn.functional as F
 from torch.optim import Adam
 from Main.pargs import pargs
 from Main.utils import create_log_dict, write_log, write_json
-from Main.word2vec import Embedding, collect_sentences, train_word2vec, save_word_embedding
-from Main.sort import sort_weibo_dataset, sort_weibo_self_dataset, sort_weibo_2class_dataset
+from Main.word2vec import collect_sentences, train_word2vec, save_word_embedding
+from Main.sort import sort_weibo_dataset, sort_weibo_2class_dataset
 from Main.dataset import WeiboDataLoader
 from Main.models import WordEncoder, PositionEncoder, HierarchicalTransformer
 from Main.optimizer import Optimizer
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
 
-def train(word_encoder, word_pos_encoder, time_delay_encoder, hierarchical_transformer, dataloader, device):
+def train(word_encoder, word_pos_encoder, time_delay_encoder, hierarchical_transformer, dataloader, hitplan, device):
     hierarchical_transformer.train()
     total_loss = 0
 
@@ -36,15 +38,21 @@ def train(word_encoder, word_pos_encoder, time_delay_encoder, hierarchical_trans
         optimizer.zero_grad()
 
         X = word_encoder(X)
-        word_pos = word_pos_encoder(word_pos)
+        word_pos = word_pos_encoder(word_pos) if hitplan else None
         time_delay = time_delay_encoder(time_delay)
 
+        if not hitplan:
+            batch_size, num_posts, num_words, emb_dim = X.shape
+            X = X.view(-1, num_words, emb_dim)
+            X = X.permute(0, 2, 1).contiguous()
+            X = F.adaptive_max_pool1d(X, 1).squeeze(-1)
+            X = X.view(batch_size, num_posts, emb_dim)
         X = X.to(device)
         y = y.to(device)
-        word_pos = word_pos.to(device)
+        word_pos = word_pos.to(device) if hitplan else None
         time_delay = time_delay.to(device)
         structure = structure.to(device)
-        attention_mask_word = attention_mask_word.to(device)
+        attention_mask_word = attention_mask_word.to(device) if hitplan else None
         attention_mask_post = attention_mask_post.to(device)
         pred = hierarchical_transformer(X, word_pos, time_delay, structure,
                                         attention_mask_word=attention_mask_word,
@@ -59,8 +67,8 @@ def train(word_encoder, word_pos_encoder, time_delay_encoder, hierarchical_trans
     return total_loss / len(dataloader.train_dataset)
 
 
-def test(word_encoder, word_pos_encoder, time_delay_encoder, hierarchical_transformer, dataloader, dataset_type,
-         device):
+def test(word_encoder, word_pos_encoder, time_delay_encoder, hierarchical_transformer, dataloader, hitplan,
+         dataset_type, device):
     hierarchical_transformer.eval()
     error = 0
 
@@ -69,15 +77,21 @@ def test(word_encoder, word_pos_encoder, time_delay_encoder, hierarchical_transf
     for X, y, word_pos, time_delay, structure, attention_mask_word, attention_mask_post in dataloader.get_data(
             dataset_type):
         X = word_encoder(X)
-        word_pos = word_pos_encoder(word_pos)
+        word_pos = word_pos_encoder(word_pos) if hitplan else None
         time_delay = time_delay_encoder(time_delay)
 
+        if not hitplan:
+            batch_size, num_posts, num_words, emb_dim = X.shape
+            X = X.view(-1, num_words, emb_dim)
+            X = X.permute(0, 2, 1).contiguous()
+            X = F.adaptive_max_pool1d(X, 1).squeeze(-1)
+            X = X.view(batch_size, num_posts, emb_dim)
         X = X.to(device)
         y = y.to(device)
-        word_pos = word_pos.to(device)
+        word_pos = word_pos.to(device) if hitplan else None
         time_delay = time_delay.to(device)
         structure = structure.to(device)
-        attention_mask_word = attention_mask_word.to(device)
+        attention_mask_word = attention_mask_word.to(device) if hitplan else None
         attention_mask_post = attention_mask_post.to(device)
         pred = hierarchical_transformer(X, word_pos, time_delay, structure,
                                         attention_mask_word=attention_mask_word,
@@ -101,12 +115,13 @@ def test(word_encoder, word_pos_encoder, time_delay_encoder, hierarchical_transf
     return error / length, acc, prec, rec, f1
 
 
-def test_and_log(word_encoder, word_pos_encoder, time_delay_encoder, hierarchical_transformer, dataloader,
+def test_and_log(word_encoder, word_pos_encoder, time_delay_encoder, hierarchical_transformer, dataloader, hitplan,
                  device, epoch, lr, loss, train_acc, log_record):
     val_error, val_acc, val_prec, val_rec, val_f1 = test(word_encoder, word_pos_encoder, time_delay_encoder,
-                                                         hierarchical_transformer, dataloader, 'val', device)
+                                                         hierarchical_transformer, dataloader, hitplan, 'val', device)
     test_error, test_acc, test_prec, test_rec, test_f1 = test(word_encoder, word_pos_encoder, time_delay_encoder,
-                                                              hierarchical_transformer, dataloader, 'test', device)
+                                                              hierarchical_transformer, dataloader, hitplan, 'test',
+                                                              device)
     log_info = 'Epoch: {:03d}, LR: {:7f}, Loss: {:.7f}, Validation BCE: {:.7f}, Test BCE: {:.7f}, Train ACC: {:.3f}, Validation ACC: {:.3f}, Test ACC: {:.3f}, Test PREC(T/F): {:.3f}/{:.3f}, Test REC(T/F): {:.3f}/{:.3f}, Test F1(T/F): {:.3f}/{:.3f}' \
         .format(epoch, lr, loss, val_error, test_error, train_acc, val_acc, test_acc, test_prec[0], test_prec[1],
                 test_rec[0],
@@ -131,8 +146,8 @@ if __name__ == '__main__':
     device = torch.device(args.gpu if args.cuda else "cpu")
     # device = args.gpu if args.cuda else 'cpu'
     runs = args.runs
-    k = args.k
     epochs = args.epochs
+    hitplan = args.hitplan
 
     label_source_path = osp.join(dirname, '..', 'Data', dataset, 'source')
     label_dataset_path = osp.join(dirname, '..', 'Data', dataset, 'dataset')
@@ -164,16 +179,23 @@ if __name__ == '__main__':
         log_record = {'run': run, 'val accs': [], 'test accs': [], 'test prec T': [], 'test prec F': [],
                       'test rec T': [], 'test rec F': [], 'test f1 T': [], 'test f1 F': []}
 
-        # if dataset == 'Weibo':
-        #     sort_weibo_dataset(label_source_path, label_dataset_path, k)
-        # elif dataset == 'Weibo-2class' or dataset == 'Weibo-2class-long':
-        #     sort_weibo_2class_dataset(label_source_path, label_dataset_path, k)
+        if not osp.exists(osp.join(label_dataset_path, 'raw')):
+            if dataset == 'Weibo':
+                sort_weibo_dataset(label_source_path, label_dataset_path)
+            elif dataset == 'Weibo-2class' or dataset == 'Weibo-2class-long':
+                sort_weibo_2class_dataset(label_source_path, label_dataset_path)
 
         dataloader = WeiboDataLoader(label_dataset_path, word_embedding_dir, word_embedding_filename, args.max_length,
-                                     args.num_structure_index, args.size, args.batch_size)
+                                     args.max_tweet, args.num_structure_index, args.size, args.batch_size)
+        index = list(range(len(dataloader.examples)))
+        random.shuffle(index)
+        train_index = index[:int(len(index) * 0.6)]
+        test_index = index[int(len(index) * 0.6):int(len(index) * 0.8)]
+        val_index = index[int(len(index) * 0.8):]
+        dataloader.split_dataset(train_index, test_index, val_index)
 
         word_encoder = WordEncoder(args, dataloader)
-        word_pos_encoder = PositionEncoder(args, args.pos_num)
+        word_pos_encoder = PositionEncoder(args, args.pos_num) if hitplan else None
         time_delay_encoder = PositionEncoder(args, args.size)
 
         hierarchical_transformer = HierarchicalTransformer(args).to(device)
@@ -184,19 +206,21 @@ if __name__ == '__main__':
         optimizer = Optimizer(args, adam_optimizer)
 
         val_error, log_info, log_record = test_and_log(word_encoder, word_pos_encoder, time_delay_encoder,
-                                                       hierarchical_transformer, dataloader,
+                                                       hierarchical_transformer, dataloader, hitplan,
                                                        device, 0, adam_optimizer.param_groups[0]['lr'], 0, 0,
                                                        log_record)
         write_log(log, log_info)
 
         for epoch in range(1, epochs + 1):
             lr = optimizer.optimizer.param_groups[0]['lr']
-            _ = train(word_encoder, word_pos_encoder, time_delay_encoder, hierarchical_transformer, dataloader, device)
+            _ = train(word_encoder, word_pos_encoder, time_delay_encoder, hierarchical_transformer, dataloader,
+                      args.hitplan, device)
 
             train_error, train_acc, _, _, _ = test(word_encoder, word_pos_encoder, time_delay_encoder,
-                                                   hierarchical_transformer, dataloader, 'train', device)
+                                                   hierarchical_transformer, dataloader, hitplan, 'train', device)
             val_error, log_info, log_record = test_and_log(word_encoder, word_pos_encoder, time_delay_encoder,
-                                                           hierarchical_transformer, dataloader, device, epoch,
+                                                           hierarchical_transformer, dataloader, hitplan, device,
+                                                           epoch,
                                                            lr, train_error, train_acc, log_record)
             write_log(log, log_info)
 

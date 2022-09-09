@@ -22,15 +22,13 @@ nlp = Chinese()
 class WeiboDataLoader():
 
     def __init__(self, root, word_embedding_dir, word_embedding_filename, max_length,
-                 num_structure_index, num_bin, batch_size, clean=True):
+                 max_tweet, num_structure_index, num_bin, batch_size, clean=True):
         self.root = root
-        self.train_path = osp.join(root, 'train')
-        self.val_path = osp.join(root, 'val')
-        self.test_path = osp.join(root, 'test')
         self.word_embedding_dir = word_embedding_dir
         self.word_embedding_filename = word_embedding_filename
         self.num_structure_index = num_structure_index
         self.max_length = max_length
+        self.max_tweet = max_tweet
         self.num_bin = num_bin
         self.batch_size = batch_size
         self.clean = clean
@@ -65,31 +63,28 @@ class WeiboDataLoader():
     def tokenize_structure(structure_lst):
         return structure_lst
 
-    @staticmethod
-    def tokenize_text(text):
-        token_lst = [token.text for token in nlp(text)]
+    def tokenize_text(self, text):
+        if self.max_length == 0:
+            token_lst = [token.text for token in nlp(text)]
+        else:
+            token_lst = [token.text for token in nlp(text)][:self.max_length]
         return token_lst
 
     # Step 1: Define the data fields
     def define_fields(self):
-        if self.max_length == 0:
-            self.tweet_field = Field(sequential=True,
-                                     tokenize=WeiboDataLoader.tokenize_text)
-        else:
-            self.tweet_field = Field(sequential=True,
-                                     tokenize=WeiboDataLoader.tokenize_text,
-                                     fix_length=self.max_length)
+        self.tweet_field = Field(sequential=True,
+                                 tokenize=self.tokenize_text)
 
         self.timestamp_field = Field(sequential=False,
                                      use_vocab=False)
+
+        self.label_field = Field(sequential=False,
+                                 use_vocab=False)
 
         self.structure_field = Field(sequential=True,
                                      tokenize=lambda x: WeiboDataLoader.tokenize_structure(x),
                                      pad_token=self.num_structure_index,
                                      use_vocab=False)
-
-        self.label_field = Field(sequential=False,
-                                 use_vocab=False)
 
         self.tweet_lst_field = NestedField(self.tweet_field)
 
@@ -103,9 +98,9 @@ class WeiboDataLoader():
         self.data_fields = data_fields
 
     # Step 2: Reading the data
-    def read_data(self, path):
+    def read_data(self):
         examples = []
-        raw_dir = osp.join(path, 'raw')
+        raw_dir = osp.join(self.root, 'raw')
         raw_file_names = os.listdir(raw_dir)
 
         if self.clean:
@@ -149,6 +144,9 @@ class WeiboDataLoader():
                     if comments[i]['parent'] != None:
                         comments[i]['parent'] += 1
                     comments[i]['time'] = str2timestamp(comments[i]['time'])
+
+                if self.max_tweet > 0:
+                    comments = comments[:self.max_tweet]
 
                 tweets = []
                 time_delay = []
@@ -195,6 +193,10 @@ class WeiboDataLoader():
                     if comments[i]['parent'] != None:
                         comments[i]['parent'] += 1
                     comments[i]['time'] = str2timestamp(comments[i]['time'])
+
+                if self.max_tweet > 0:
+                    comments = comments[:self.max_tweet]
+
                 tweets = []
                 time_delay = []
                 structure = []
@@ -224,18 +226,24 @@ class WeiboDataLoader():
                     structure.append(node_structure)
                 examples.append(Example.fromlist([tweets, time_delay, structure, label], self.data_fields))
 
-        return Dataset(examples, self.data_fields)
+        self.examples = examples
 
     # Step 3: Building the vectors
     def build_vectors(self):
+        full_dataset = Dataset(self.examples, self.data_fields)
         vec = vocab.Vectors(name=self.word_embedding_filename, cache=self.word_embedding_dir)
-        self.tweet_field.build_vocab(getattr(self.train_dataset, 'tweets'),
-                                     getattr(self.test_dataset, 'tweets'),
-                                     getattr(self.val_dataset, 'tweets'),
-                                     min_freq=5,
-                                     vectors=vec)
+        self.tweet_field.build_vocab(getattr(full_dataset, 'tweets'), min_freq=5, vectors=vec)
 
-    # Step 4: Loading the data in batches
+    def run_pipeline(self):
+        # Step 1 : Define the data fields
+        self.define_fields()
+
+        # Step 2: Reading the data
+        self.read_data()
+
+        # Step 3: Building the vectors
+        self.build_vectors()
+
     def load_batches(self, dataset):
         batch = BucketIterator(dataset=dataset,
                                batch_size=self.batch_size,
@@ -244,19 +252,15 @@ class WeiboDataLoader():
                                repeat=False)
         return batch
 
-    def run_pipeline(self):
-        # Step 1 : Define the data fields
-        self.define_fields()
+    def split_dataset(self, train_index, test_index, val_index):
+        train_examples = [example for i, example in enumerate(self.examples) if i in train_index]
+        test_examples = [example for i, example in enumerate(self.examples) if i in test_index]
+        val_examples = [example for i, example in enumerate(self.examples) if i in val_index]
 
-        # Step 2: Reading the data
-        self.train_dataset = self.read_data(self.train_path)
-        self.test_dataset = self.read_data(self.test_path)
-        self.val_dataset = self.read_data(self.val_path)
+        self.train_dataset = Dataset(train_examples, self.data_fields)
+        self.test_dataset = Dataset(test_examples, self.data_fields)
+        self.val_dataset = Dataset(val_examples, self.data_fields)
 
-        # Step 3: Building the vectors
-        self.build_vectors()
-
-        # Step 4: Batching the data
         self.train_batch = self.load_batches(self.train_dataset)
         self.test_batch = self.load_batches(self.test_dataset)
         self.val_batch = self.load_batches(self.val_dataset)

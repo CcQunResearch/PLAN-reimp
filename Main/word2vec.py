@@ -9,11 +9,9 @@ from Main.pargs import pargs
 import os
 import os.path as osp
 import json
-import random
 import torch
 from gensim.models import Word2Vec
 from Main.utils import clean_comment
-from Main.sort import sort_weibo_dataset, sort_weibo_self_dataset
 
 
 class Embedding():
@@ -70,16 +68,7 @@ class Embedding():
 
 
 def collect_sentences(label_dataset_path):
-    train_path = osp.join(label_dataset_path, 'train', 'raw')
-    val_path = osp.join(label_dataset_path, 'val', 'raw')
-    test_path = osp.join(label_dataset_path, 'test', 'raw')
-
-    sentences = collect_label_sentences(train_path) + collect_label_sentences(val_path) \
-                + collect_label_sentences(test_path)
-    return sentences
-
-
-def collect_label_sentences(path):
+    path = osp.join(label_dataset_path, 'raw')
     sentences = []
     for filename in os.listdir(path):
         filepath = osp.join(path, filename)

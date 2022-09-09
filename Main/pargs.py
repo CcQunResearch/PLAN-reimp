@@ -13,17 +13,17 @@ def pargs():
     parser.add_argument('--cuda', type=str2bool, default=True)
     parser.add_argument('--gpu', type=int, default=0)
 
-    parser.add_argument('--batch_size', type=int, default=4)
+    parser.add_argument('--hitplan', type=str2bool, default=False)  # whether use transformer to get post embedding
+    parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--epochs', type=int, default=100)
-
-    parser.add_argument('--k', type=int, default=10000)
 
     # Word padding settings
     parser.add_argument('--max_length', type=int, default=0)  # Pad the content to max_length words
+    parser.add_argument('--max_tweet', type=int, default=350)
 
     # Word Embedding settings
-    parser.add_argument('--pos_num', type=int, default=500)
-    parser.add_argument('--emb_dim', type=int, default=300)
+    parser.add_argument('--pos_num', type=int, default=300)
+    parser.add_argument('--emb_dim', type=int, default=200)
     parser.add_argument('--num_structure_index', type=int, default=5)
 
     # Versioning of methods
@@ -43,7 +43,8 @@ def pargs():
     parser.add_argument('--include_time_interval', type=str2bool, default=True)
 
     # Model parameters settings
-    parser.add_argument('--d_model', type=int, default=300)
+    parser.add_argument('--d_model', type=int, default=200)
+    parser.add_argument('--d_feed_forward', type=int, default=400)
     parser.add_argument('--dropout_rate', type=float, default=0.3)
 
     # <------------------------ WORD LEVEL ------------------------>
@@ -63,9 +64,6 @@ def pargs():
     parser.add_argument('--n_mha_layers', type=int, default=12)
     # Number of MHA heads
     parser.add_argument('--n_head', type=int, default=2)
-
-    # Model parameters settings (For feedforward network)
-    parser.add_argument('--d_feed_forward', type=int, default=600)
 
     # Learning rate
     parser.add_argument('--learning_rate', type=float, default=0.01)

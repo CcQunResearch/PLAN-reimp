@@ -8,17 +8,23 @@
 import os
 import json
 import random
+import shutil
 import time
 from Main.utils import write_post, dataset_makedirs
 
 
-def sort_weibo_dataset(source_path, dataset_path, k_shot=10000):
+def sort_weibo_dataset(source_path, dataset_path):
     post_id_list = []
     post_label_list = []
     all_post = []
 
     label_path = os.path.join(source_path, 'Weibo.txt')
-    train_path, val_path, test_path = dataset_makedirs(dataset_path)
+    if os.path.exists(dataset_path):
+        shutil.rmtree(dataset_path)
+    raw_path = os.path.join(dataset_path, 'raw')
+    processed_path = os.path.join(dataset_path, 'processed')
+    os.makedirs(raw_path)
+    os.makedirs(processed_path)
 
     f = open(label_path, 'r', encoding='utf-8')
     post_list = f.readlines()
@@ -58,78 +64,16 @@ def sort_weibo_dataset(source_path, dataset_path, k_shot=10000):
                 comment_list[parent_index]['children'].append(k - 1)
         all_post.append((post_id, {'source': source, 'comment': comment_list}))
 
-    random.seed(time.time())
-    random.shuffle(all_post)
-
-    train_post = []
-    positive_num = 0
-    negative_num = 0
-    for post in all_post[:int(len(all_post) * 0.6)]:
-        if post[1]['source']['label'] == 1 and positive_num != k_shot:
-            train_post.append(post)
-            positive_num += 1
-        if post[1]['source']['label'] == 0 and negative_num != k_shot:
-            train_post.append(post)
-            negative_num += 1
-        if positive_num == k_shot and negative_num == k_shot:
-            break
-    val_post = all_post[int(len(all_post) * 0.6):int(len(all_post) * 0.8)]
-    test_post = all_post[int(len(all_post) * 0.8):]
-    write_post(train_post, train_path)
-    write_post(val_post, val_path)
-    write_post(test_post, test_path)
+    write_post(all_post, raw_path)
 
 
-def sort_weibo_self_dataset(label_source_path, label_dataset_path, unlabel_dataset_path, k_shot=10000):
-    train_path, val_path, test_path = dataset_makedirs(label_dataset_path)
-
-    years = ['2020', '2021', '2022']
-    label_file_paths = []
-    for year in years:
-        path = os.path.join(label_source_path, year)
-        for filename in os.listdir(path):
-            label_file_paths.append(os.path.join(path, filename))
-
-    unlabel_source_path = os.path.join(unlabel_dataset_path, 'raw')
-    unlabel_file_paths = []
-    all_unlabel_filenames = os.listdir(unlabel_source_path)
-    random.seed(1234)
-    random.shuffle(all_unlabel_filenames)
-    for i in range(len(label_file_paths)):
-        unlabel_file_paths.append(os.path.join(unlabel_source_path, all_unlabel_filenames[i]))
-
-    all_post = []
-    for filepath in label_file_paths:
-        post = json.load(open(filepath, 'r', encoding='utf-8'))
-        all_post.append((post['source']['tweet id'], post))
-    for filepath in unlabel_file_paths:
-        post = json.load(open(filepath, 'r', encoding='utf-8'))
-        post['source']['label'] = 0
-        all_post.append((post['source']['tweet id'], post))
-
-    random.seed(time.time())
-    random.shuffle(all_post)
-    train_post = []
-    positive_num = 0
-    negative_num = 0
-    for post in all_post[:int(len(all_post) * 0.6)]:
-        if post[1]['source']['label'] == 1 and positive_num != k_shot:
-            train_post.append(post)
-            positive_num += 1
-        if post[1]['source']['label'] == 0 and negative_num != k_shot:
-            train_post.append(post)
-            negative_num += 1
-        if positive_num == k_shot and negative_num == k_shot:
-            break
-    val_post = all_post[int(len(all_post) * 0.6):int(len(all_post) * 0.8)]
-    test_post = all_post[int(len(all_post) * 0.8):]
-    write_post(train_post, train_path)
-    write_post(val_post, val_path)
-    write_post(test_post, test_path)
-
-
-def sort_weibo_2class_dataset(label_source_path, label_dataset_path, k_shot=10000):
-    train_path, val_path, test_path = dataset_makedirs(label_dataset_path)
+def sort_weibo_2class_dataset(label_source_path, label_dataset_path):
+    if os.path.exists(label_dataset_path):
+        shutil.rmtree(label_dataset_path)
+    raw_path = os.path.join(label_dataset_path, 'raw')
+    processed_path = os.path.join(label_dataset_path, 'processed')
+    os.makedirs(raw_path)
+    os.makedirs(processed_path)
 
     label_file_paths = []
     for filename in os.listdir(label_source_path):
@@ -140,22 +84,4 @@ def sort_weibo_2class_dataset(label_source_path, label_dataset_path, k_shot=1000
         post = json.load(open(filepath, 'r', encoding='utf-8'))
         all_post.append((post['source']['tweet id'], post))
 
-    random.seed(time.time())
-    random.shuffle(all_post)
-    train_post = []
-    positive_num = 0
-    negative_num = 0
-    for post in all_post[:int(len(all_post) * 0.6)]:
-        if post[1]['source']['label'] == 1 and positive_num != k_shot:
-            train_post.append(post)
-            positive_num += 1
-        if post[1]['source']['label'] == 0 and negative_num != k_shot:
-            train_post.append(post)
-            negative_num += 1
-        if positive_num == k_shot and negative_num == k_shot:
-            break
-    val_post = all_post[int(len(all_post) * 0.6):int(len(all_post) * 0.8)]
-    test_post = all_post[int(len(all_post) * 0.8):]
-    write_post(train_post, train_path)
-    write_post(val_post, val_path)
-    write_post(test_post, test_path)
+    write_post(all_post, raw_path)
