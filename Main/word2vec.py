@@ -89,8 +89,8 @@ def save_word_embedding(save_path, model_path):
         embedding = Word2Vec.load(model_path)
         vecs = []
         for word in embedding.wv.index_to_key:
-            if word != ' ':
+            if word != ' ' and word != '\n':
                 vec = [str(value) for value in embedding.wv.get_vector(word, norm=True).tolist()]
-                vecs.append(' '.join([word] + vec))
+                vecs.append(' '.join([word] + vec) + '\n')
         with open(save_path, 'w', encoding='utf-8') as f:
-            f.write('\n'.join(vecs))
+            f.writelines(vecs)

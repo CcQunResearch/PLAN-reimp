@@ -104,7 +104,7 @@ class WeiboDataLoader():
         raw_file_names = os.listdir(raw_dir)
 
         if self.clean:
-            limit_num = 600
+            limit_num = self.max_tweet
             pass_comment = ['', '转发微博', '转发微博。', '轉發微博', '轉發微博。']
             for filename in raw_file_names:
                 filepath = osp.join(raw_dir, filename)
@@ -131,7 +131,7 @@ class WeiboDataLoader():
                         continue
                     if comment['parent'] != -1:
                         comment['parent'] = post['comment'][id_to_index[comment['parent']]]['comment id']
-                comments = [comment for i, comment in enumerate(post['comment'][:600]) if i not in del_index]
+                comments = [comment for i, comment in enumerate(post['comment'][:limit_num]) if i not in del_index]
                 source_comment = {
                     'comment id': -1,
                     'parent': None,
@@ -145,8 +145,8 @@ class WeiboDataLoader():
                         comments[i]['parent'] += 1
                     comments[i]['time'] = str2timestamp(comments[i]['time'])
 
-                if self.max_tweet > 0:
-                    comments = comments[:self.max_tweet]
+                # if self.max_tweet > 0:
+                #     comments = comments[:self.max_tweet]
 
                 tweets = []
                 time_delay = []
@@ -162,18 +162,23 @@ class WeiboDataLoader():
                         if i == j:
                             node_structure.append(4)
                             continue
-                        if comments[i]['parent'] == j:
+                        elif comments[i]['parent'] == j:
                             node_structure.append(0)
                             continue
-                        if comments[j]['parent'] == i:
+                        elif comments[j]['parent'] == i:
                             node_structure.append(1)
                             continue
-                        if comments[i]['time'] > comments[j]['time']:
+                        elif comments[i]['time'] > comments[j]['time']:
                             node_structure.append(2)
                             continue
-                        if comments[i]['time'] < comments[j]['time']:
+                        elif comments[i]['time'] < comments[j]['time']:
                             node_structure.append(3)
                             continue
+                        else:
+                            rel = 3 if i < j else 2
+                            node_structure.append(rel)
+                            continue
+
                     structure.append(node_structure)
                 examples.append(Example.fromlist([tweets, time_delay, structure, label], self.data_fields))
         else:
@@ -211,17 +216,21 @@ class WeiboDataLoader():
                         if i == j:
                             node_structure.append(4)
                             continue
-                        if comments[i]['parent'] == j:
+                        elif comments[i]['parent'] == j:
                             node_structure.append(0)
                             continue
-                        if comments[j]['parent'] == i:
+                        elif comments[j]['parent'] == i:
                             node_structure.append(1)
                             continue
-                        if comments[i]['time'] > comments[j]['time']:
+                        elif comments[i]['time'] > comments[j]['time']:
                             node_structure.append(2)
                             continue
-                        if comments[i]['time'] < comments[j]['time']:
+                        elif comments[i]['time'] < comments[j]['time']:
                             node_structure.append(3)
+                            continue
+                        else:
+                            rel = 3 if i < j else 2
+                            node_structure.append(rel)
                             continue
                     structure.append(node_structure)
                 examples.append(Example.fromlist([tweets, time_delay, structure, label], self.data_fields))
@@ -244,9 +253,10 @@ class WeiboDataLoader():
         # Step 3: Building the vectors
         self.build_vectors()
 
-    def load_batches(self, dataset):
+    def load_batches(self, dataset, batch_size=0):
+        bs = batch_size if batch_size != 0 else self.batch_size
         batch = BucketIterator(dataset=dataset,
-                               batch_size=self.batch_size,
+                               batch_size=bs,
                                sort_key=lambda x: len(getattr(x, 'tweets')),
                                sort_within_batch=True,
                                repeat=False)
@@ -262,5 +272,5 @@ class WeiboDataLoader():
         self.val_dataset = Dataset(val_examples, self.data_fields)
 
         self.train_batch = self.load_batches(self.train_dataset)
-        self.test_batch = self.load_batches(self.test_dataset)
-        self.val_batch = self.load_batches(self.val_dataset)
+        self.test_batch = self.load_batches(self.test_dataset, 1)
+        self.val_batch = self.load_batches(self.val_dataset, 1)

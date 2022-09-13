@@ -54,6 +54,12 @@ def train(word_encoder, word_pos_encoder, time_delay_encoder, hierarchical_trans
         structure = structure.to(device)
         attention_mask_word = attention_mask_word.to(device) if hitplan else None
         attention_mask_post = attention_mask_post.to(device)
+        if X.shape[1] > 500:
+            print(X.shape)
+            print(time_delay.shape)
+            print(structure.shape)
+            print(attention_mask_post.shape)
+            print()
         pred = hierarchical_transformer(X, word_pos, time_delay, structure,
                                         attention_mask_word=attention_mask_word,
                                         attention_mask_post=attention_mask_post)
@@ -93,6 +99,11 @@ def test(word_encoder, word_pos_encoder, time_delay_encoder, hierarchical_transf
         structure = structure.to(device)
         attention_mask_word = attention_mask_word.to(device) if hitplan else None
         attention_mask_post = attention_mask_post.to(device)
+        # print(X.shape)
+        # print(time_delay.shape)
+        # print(structure.shape)
+        # print(attention_mask_post.shape)
+        # print()
         pred = hierarchical_transformer(X, word_pos, time_delay, structure,
                                         attention_mask_word=attention_mask_word,
                                         attention_mask_post=attention_mask_post)
@@ -185,8 +196,9 @@ if __name__ == '__main__':
             elif dataset == 'Weibo-2class' or dataset == 'Weibo-2class-long':
                 sort_weibo_2class_dataset(label_source_path, label_dataset_path)
 
+        clean = True if dataset == 'Weibo' else False
         dataloader = WeiboDataLoader(label_dataset_path, word_embedding_dir, word_embedding_filename, args.max_length,
-                                     args.max_tweet, args.num_structure_index, args.size, args.batch_size)
+                                     args.max_tweet, args.num_structure_index, args.size, args.batch_size, clean)
         index = list(range(len(dataloader.examples)))
         random.shuffle(index)
         train_index = index[:int(len(index) * 0.6)]
@@ -200,9 +212,12 @@ if __name__ == '__main__':
 
         hierarchical_transformer = HierarchicalTransformer(args).to(device)
 
-        adam_optimizer = Adam(hierarchical_transformer.parameters(),
-                              np.power(args.d_model, - 0.5),
-                              betas=(args.beta_1, args.beta_2))
+        if args.vary_lr:
+            adam_optimizer = Adam(hierarchical_transformer.parameters(),
+                                  np.power(args.d_model, - 0.5),
+                                  betas=(args.beta_1, args.beta_2))
+        else:
+            adam_optimizer = Adam(hierarchical_transformer.parameters(), lr=args.lr)
         optimizer = Optimizer(args, adam_optimizer)
 
         val_error, log_info, log_record = test_and_log(word_encoder, word_pos_encoder, time_delay_encoder,

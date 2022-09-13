@@ -18,8 +18,8 @@ def pargs():
     parser.add_argument('--epochs', type=int, default=100)
 
     # Word padding settings
-    parser.add_argument('--max_length', type=int, default=0)  # Pad the content to max_length words
-    parser.add_argument('--max_tweet', type=int, default=350)
+    parser.add_argument('--max_length', type=int, default=0)  # Pad the content to max_length words, 0 for no limit
+    parser.add_argument('--max_tweet', type=int, default=400)
 
     # Word Embedding settings
     parser.add_argument('--pos_num', type=int, default=300)
@@ -66,7 +66,7 @@ def pargs():
     parser.add_argument('--n_head', type=int, default=2)
 
     # Learning rate
-    parser.add_argument('--learning_rate', type=float, default=0.01)
+    parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--beta_1', type=float, default=0.90)
     parser.add_argument('--beta_2', type=float, default=0.98)
     parser.add_argument('--n_warmup_steps', type=int, default=6000)
