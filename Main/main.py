@@ -20,6 +20,7 @@ import time
 import torch
 import torch.nn.functional as F
 from torch.optim import Adam
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from Main.pargs import pargs
 from Main.utils import create_log_dict, write_log, write_json
 from Main.word2vec import collect_sentences, train_word2vec, save_word_embedding
@@ -218,6 +219,7 @@ if __name__ == '__main__':
                                   betas=(args.beta_1, args.beta_2))
         else:
             adam_optimizer = Adam(hierarchical_transformer.parameters(), lr=args.lr)
+            scheduler = ReduceLROnPlateau(adam_optimizer, mode='min', factor=0.7, patience=5, min_lr=0.000001)
         optimizer = Optimizer(args, adam_optimizer)
 
         val_error, log_info, log_record = test_and_log(word_encoder, word_pos_encoder, time_delay_encoder,
@@ -235,9 +237,11 @@ if __name__ == '__main__':
                                                    hierarchical_transformer, dataloader, hitplan, 'train', device)
             val_error, log_info, log_record = test_and_log(word_encoder, word_pos_encoder, time_delay_encoder,
                                                            hierarchical_transformer, dataloader, hitplan, device,
-                                                           epoch,
-                                                           lr, train_error, train_acc, log_record)
+                                                           epoch, lr, train_error, train_acc, log_record)
             write_log(log, log_info)
+
+            if not args.vary_lr:
+                scheduler.step(val_error)
 
         log_record['mean acc'] = round(np.mean(log_record['test accs'][-10:]), 3)
         write_log(log, '')

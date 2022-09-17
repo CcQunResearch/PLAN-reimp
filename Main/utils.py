@@ -88,7 +88,7 @@ def create_log_dict(args):
 
     log_dict['d_feed_forward'] = args.d_feed_forward
 
-    log_dict['learning_rate'] = args.learning_rate
+    log_dict['learning_rate'] = args.lr
     log_dict['beta_1'] = args.beta_1
     log_dict['beta_2'] = args.beta_2
     log_dict['n_warmup_steps'] = args.n_warmup_steps

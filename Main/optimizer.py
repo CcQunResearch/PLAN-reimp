@@ -14,7 +14,7 @@ class Optimizer():
 
         self.n_warmup_steps = self.config.n_warmup_steps
         self.n_current_steps = 0
-        self.init_lr = self.config.learning_rate  # np.power(self.config.d_model, -0.5)
+        self.init_lr = self.config.lr  # np.power(self.config.d_model, -0.5)
 
     def get_lr_scale(self):
         return min(np.power(self.n_current_steps, -0.5), self.n_current_steps * np.power(self.n_warmup_steps, -1.5))

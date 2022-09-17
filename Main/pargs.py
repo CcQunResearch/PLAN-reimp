@@ -5,7 +5,7 @@ def pargs():
     str2bool = lambda x: x.lower() == "true"
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--dataset', type=str, default='Weibo')
+    parser.add_argument('--dataset', type=str, default='Weibo-2class')
     parser.add_argument('--runs', type=int, default=10)
     # 'zh' for chinese, 'en' for english
     # parser.add_argument('--language', type=str, default='zh')
@@ -70,7 +70,7 @@ def pargs():
     parser.add_argument('--beta_1', type=float, default=0.90)
     parser.add_argument('--beta_2', type=float, default=0.98)
     parser.add_argument('--n_warmup_steps', type=int, default=6000)
-    parser.add_argument('--vary_lr', type=str2bool, default=True)
+    parser.add_argument('--vary_lr', type=str2bool, default=False)
 
     args = parser.parse_args()
     return args
